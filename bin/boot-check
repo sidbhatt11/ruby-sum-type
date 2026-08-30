@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Boot the app and report whether it loaded. If it boots, every matcher in it
+# is exhaustive. --backtrace-limit only trims zeitwerk's eager-load frames.
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+
+RUBYOPT="--backtrace-limit=2" ./bin/rails runner 'nil'
+status=$?
+
+if [ $status -eq 0 ]; then
+  echo "BOOT OK — every matcher is exhaustive."
+else
+  echo
+  echo "BOOT FAILED (exit $status) — a matcher does not cover its sum."
+fi
+exit $status

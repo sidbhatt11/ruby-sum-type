@@ -1,0 +1,6 @@
+log/
+tmp/
+.bundle/
+storage/
+node_modules/
+.DS_Store

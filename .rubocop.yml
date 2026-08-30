@@ -1,0 +1,43 @@
+require:
+  - ./lib/rubocop/cop/sum_type/matcher_in_method
+  - ./lib/rubocop/cop/sum_type/variants_not_declared
+
+AllCops:
+  TargetRubyVersion: 3.4   # endless methods, Data.define, `it` block param
+  NewCops: enable          # full strictness: every cop, new ones included
+  SuggestExtensions: false
+
+  Exclude:
+    - 'tmp/**/*'
+    - 'vendor/**/*'
+    - '.ruby-lsp/**/*'
+
+Metrics/BlockLength:
+  Exclude:
+    - 'Rakefile'
+
+# Test fixtures are deliberately bare: an empty class with a subclass is the
+# minimal way to exercise the matcher's is_a? fallback.
+Lint/EmptyClass:
+  Exclude:
+    - 'test/**/*'
+
+# The demo hinges on uncommenting one line, so every entry carries its comma
+# and the edit stays a single character.
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+
+# Matchers must be constants, or the boot check never sees them.
+SumType/MatcherInMethod:
+  Enabled: true
+  Include:
+    - 'app/**/*.rb'
+    - 'bin/*'
+
+# A sum with no variants fails on first use, which the boot check only reaches
+# if something else already matches on it.
+SumType/VariantsNotDeclared:
+  Enabled: true
+  Include:
+    - 'app/**/*.rb'
+    - 'bin/*'

@@ -1,0 +1,73 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Dispatch cost, four ways. No Rails needed.
+# Absolute numbers vary by machine; the shape does not.
+require_relative '../app/models/concerns/sum_type'
+
+module Bench
+  # The sum under test: four variants, cycled evenly through every run.
+  module Status
+    extend SumType
+
+    Queued  = Data.define
+    Running = Data.define(:started_at)
+    Done    = Data.define(:result)
+    Failed  = Data.define(:error)
+
+    variants queued: Queued, running: Running, done: Done, failed: Failed
+  end
+
+  # Fastest — and nothing notices the variant that forgot to define #describe.
+  module Poly
+    Queued  = Data.define { def describe = 'waiting' }
+    Running = Data.define(:started_at) { def describe = "since #{started_at}" }
+    Done    = Data.define(:result) { def describe = "finished #{result}" }
+    Failed  = Data.define(:error) { def describe = "failed #{error}" }
+  end
+end
+
+HANDLERS = {
+  queued: ->(_) { 'waiting' },
+  running: ->(s) { "since #{s.started_at}" },
+  done: ->(s) { "finished #{s.result}" },
+  failed: ->(s) { "failed #{s.error}" }
+}.freeze
+
+DESCRIBE = Bench::Status.matcher(**HANDLERS)
+
+# The concern's own index, inlined — no fallback, no method call through `sum`.
+KEY_BY_CLASS = Bench::Status.variants_map.invert.freeze
+
+def indexed_describe(value) = HANDLERS.fetch(KEY_BY_CLASS.fetch(value.class)).call(value)
+
+def case_describe(value)
+  case value
+  in Bench::Status::Queued then 'waiting'
+  in Bench::Status::Running[started_at:] then "since #{started_at}"
+  in Bench::Status::Done[result:] then "finished #{result}"
+  in Bench::Status::Failed[error:] then "failed #{error}"
+  end
+end
+
+VALUES = [Bench::Status::Queued.new, Bench::Status::Running.new(started_at: 't'),
+          Bench::Status::Done.new(result: 'r'), Bench::Status::Failed.new(error: 'e')].freeze
+POLY_VALUES = [Bench::Poly::Queued.new, Bench::Poly::Running.new(started_at: 't'),
+               Bench::Poly::Done.new(result: 'r'), Bench::Poly::Failed.new(error: 'e')].freeze
+
+N = 2_000_000
+
+def measure(label)
+  yield # warmup
+  t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  yield
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+  puts format('%<label>-24s %<ns>6.0f ns/call  (%<ips>5.2fM calls/s)',
+              label: label, ns: elapsed / N * 1e9, ips: N / elapsed / 1e6,)
+end
+
+puts "#{RUBY_DESCRIPTION}\n\n"
+measure('case/in')                { N.times { |i| case_describe(VALUES[i & 3]) } }
+measure('matcher (as shipped)')   { N.times { |i| DESCRIBE.call(VALUES[i & 3]) } }
+measure('matcher, class-indexed') { N.times { |i| indexed_describe(VALUES[i & 3]) } }
+measure('polymorphic method')     { N.times { |i| POLY_VALUES[i & 3].describe } }

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# The bare-Ruby half. PlainJobStatusOps has no case for Failed and the app
+# boots anyway; the first failed job crashes at the call site.
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+
+echo '1. The app boots — the gap in the plain match is invisible:'
+RUBYOPT="--backtrace-limit=2" ./bin/rails runner 'nil' && echo '   BOOT OK'
+
+echo
+echo '2. Then a job fails in production:'
+RUBYOPT="--backtrace-limit=2" ./bin/rails runner '
+  job = Job.new(name: "nightly import", status: JobStatus::Failed.new(error: "disk full"))
+  puts job.describe_plain
+'
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo
+  echo "   CRASHED AT RUNTIME (exit $status) — the branch nobody wrote, found by a value, not by a check."
+fi
+exit $status
